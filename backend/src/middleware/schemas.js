@@ -55,13 +55,24 @@ const updateSettingSchema = z.object({
   value: z.string()
 });
 
-const otpRequestSchema = z.object({
+const loginSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters')
+});
+
+const forgotPasswordSchema = z.object({
   email: z.string().email('Invalid email address')
 });
 
-const otpVerifySchema = z.object({
+const resetPasswordSchema = z.object({
   email: z.string().email('Invalid email address'),
-  code: z.string().length(6, 'Verification code must be 6 digits')
+  code: z.string().length(6, 'Verification code must be 6 digits'),
+  newPassword: z.string().min(6, 'New password must be at least 6 characters')
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(6, 'New password must be at least 6 characters')
 });
 
 module.exports = {
@@ -71,6 +82,8 @@ module.exports = {
   updateProductSchema,
   settingKeySchema,
   updateSettingSchema,
-  otpRequestSchema,
-  otpVerifySchema
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema
 };

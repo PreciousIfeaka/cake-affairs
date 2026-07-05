@@ -4,7 +4,7 @@ import AddProductForm from '../components/admin/AddProductForm';
 import ProductListingGrid from '../components/admin/ProductListingGrid';
 import ImageUploadZone from '../components/admin/ImageUploadZone';
 import { useProducts } from '../hooks/useProducts';
-import { setAdminKey, getSetting, updateSetting, uploadGalleryImage, requestOTP, verifyOTP, logout } from '../services/api';
+import { setAdminKey, getSetting, updateSetting, uploadGalleryImage, login, logout, forgotPassword, resetPassword, changePassword } from '../services/api';
 import { uploadDirectToCloudinary } from '../utils/cloudinaryUpload';
 import { Product } from '../types';
 import ProductDetailModal from '../components/catalogue/ProductDetailModal';
@@ -27,9 +27,21 @@ function isStoredAdminLoggedIn(): boolean {
 export default function AdminPage() {
   const { products, loading, refetch } = useProducts({ limit: 50 });
   const [authenticated, setAuthenticated] = useState<boolean>(() => isStoredAdminLoggedIn());
+  const [loginStage, setLoginStage] = useState<'login' | 'forgot' | 'reset'>('login');
   const [emailInput, setEmailInput] = useState<string>('');
-  const [otpValues, setOtpValues] = useState<string[]>(Array(6).fill(''));
-  const [loginStage, setLoginStage] = useState<'email' | 'code'>('email');
+  const [passwordInput, setPasswordInput] = useState<string>('');
+
+  // Forgot / Reset password states
+  const [otpInput, setOtpInput] = useState<string>('');
+  const [newPasswordInput, setNewPasswordInput] = useState<string>('');
+  const [confirmNewPasswordInput, setConfirmNewPasswordInput] = useState<string>('');
+
+  // Change password states (inside dashboard)
+  const [changePasswordCurrent, setChangePasswordCurrent] = useState<string>('');
+  const [changePasswordNew, setChangePasswordNew] = useState<string>('');
+  const [changePasswordConfirm, setChangePasswordConfirm] = useState<string>('');
+  const [savingChangePassword, setSavingChangePassword] = useState<boolean>(false);
+
   const [submittingLogin, setSubmittingLogin] = useState<boolean>(false);
   const [statusMsg, setStatusMsg] = useState<string>('');
   const [loginError, setLoginError] = useState<string>('');
@@ -46,82 +58,14 @@ export default function AdminPage() {
     getSetting('gallery_image_url').then(r => setGalleryPreviewUrl(r.data.value)).catch(() => {});
   }, []);
 
-  async function handleSendOTP(e: React.FormEvent<HTMLFormElement>) {
+  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!emailInput) return;
+    if (!emailInput || !passwordInput) return;
     setSubmittingLogin(true);
     setLoginError('');
-    setStatusMsg('Sending verification code...');
+    setStatusMsg('Logging in...');
     try {
-      await requestOTP(emailInput);
-      setLoginStage('code');
-      setStatusMsg('Code sent! Please check your inbox.');
-    } catch (err: any) {
-      setLoginError(err.response?.data?.error || 'Failed to send code.');
-      setStatusMsg('');
-    } finally {
-      setSubmittingLogin(false);
-    }
-  }
-
-  const handleOtpChange = (val: string, index: number) => {
-    if (val !== '' && !/^[0-9]$/.test(val)) return;
-    const newOtp = [...otpValues];
-    newOtp[index] = val;
-    setOtpValues(newOtp);
-
-    // Focus next box if value is filled
-    if (val !== '' && index < 5) {
-      const nextInput = document.getElementById(`otp-input-${index + 1}`);
-      nextInput?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
-    if (e.key === 'Backspace') {
-      if (otpValues[index] === '' && index > 0) {
-        const prevInput = document.getElementById(`otp-input-${index - 1}`);
-        prevInput?.focus();
-        const newOtp = [...otpValues];
-        newOtp[index - 1] = '';
-        setOtpValues(newOtp);
-      } else {
-        const newOtp = [...otpValues];
-        newOtp[index] = '';
-        setOtpValues(newOtp);
-      }
-    }
-  };
-
-  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const pasteData = e.clipboardData.getData('text').slice(0, 6);
-    if (!/^[0-9]+$/.test(pasteData)) return;
-
-    const newOtp = [...otpValues];
-    for (let i = 0; i < 6; i++) {
-      if (pasteData[i]) {
-        newOtp[i] = pasteData[i];
-      }
-    }
-    setOtpValues(newOtp);
-    const focusIndex = Math.min(pasteData.length, 5);
-    const targetInput = document.getElementById(`otp-input-${focusIndex}`);
-    targetInput?.focus();
-  };
-
-  async function handleVerifyOTP(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const code = otpValues.join('');
-    if (code.length !== 6) {
-      setLoginError('Please enter the full 6-digit verification code.');
-      return;
-    }
-    setSubmittingLogin(true);
-    setLoginError('');
-    setStatusMsg('Verifying code...');
-    try {
-      const res = await verifyOTP(emailInput, code);
+      const res = await login(emailInput, passwordInput);
       const token = res.data.token;
       
       const expiryTime = Date.now() + EXPIRE_TIME_MS;
@@ -133,10 +77,83 @@ export default function AdminPage() {
       setAuthenticated(true);
       setStatusMsg('');
     } catch (err: any) {
-      setLoginError(err.response?.data?.error || 'Verification failed. Please check the code.');
+      setLoginError(err.response?.data?.error || 'Login failed. Please check your credentials.');
       setStatusMsg('');
     } finally {
       setSubmittingLogin(false);
+    }
+  }
+
+  async function handleForgotPassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!emailInput) return;
+    setSubmittingLogin(true);
+    setLoginError('');
+    setStatusMsg('Sending reset code...');
+    try {
+      await forgotPassword(emailInput);
+      setLoginStage('reset');
+      setStatusMsg('Reset code sent! Please check your inbox.');
+    } catch (err: any) {
+      setLoginError(err.response?.data?.error || 'Failed to send reset code.');
+      setStatusMsg('');
+    } finally {
+      setSubmittingLogin(false);
+    }
+  }
+
+  async function handleResetPassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!emailInput || !otpInput || !newPasswordInput || !confirmNewPasswordInput) return;
+    if (newPasswordInput !== confirmNewPasswordInput) {
+      setLoginError('Passwords do not match.');
+      return;
+    }
+    setSubmittingLogin(true);
+    setLoginError('');
+    setStatusMsg('Resetting password...');
+    try {
+      const res = await resetPassword(emailInput, otpInput, newPasswordInput);
+      const token = res.data.token;
+      
+      const expiryTime = Date.now() + EXPIRE_TIME_MS;
+      localStorage.setItem('admin_logged_in', 'true');
+      localStorage.setItem('admin_key_expiry', expiryTime.toString());
+      if (token) {
+        setAdminKey(token);
+      }
+      setAuthenticated(true);
+      setStatusMsg('');
+      setLoginStage('login');
+      setOtpInput('');
+      setNewPasswordInput('');
+      setConfirmNewPasswordInput('');
+    } catch (err: any) {
+      setLoginError(err.response?.data?.error || 'Failed to reset password.');
+      setStatusMsg('');
+    } finally {
+      setSubmittingLogin(false);
+    }
+  }
+
+  async function handleChangePassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!changePasswordCurrent || !changePasswordNew || !changePasswordConfirm) return;
+    if (changePasswordNew !== changePasswordConfirm) {
+      alert('New passwords do not match.');
+      return;
+    }
+    setSavingChangePassword(true);
+    try {
+      await changePassword(changePasswordCurrent, changePasswordNew);
+      alert('Password updated successfully!');
+      setChangePasswordCurrent('');
+      setChangePasswordNew('');
+      setChangePasswordConfirm('');
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to change password. Please check your current password.');
+    } finally {
+      setSavingChangePassword(false);
     }
   }
 
@@ -150,9 +167,9 @@ export default function AdminPage() {
     localStorage.removeItem('admin_key_expiry');
     setAdminKey('');
     setAuthenticated(false);
-    setLoginStage('email');
     setEmailInput('');
-    setOtpValues(Array(6).fill(''));
+    setPasswordInput('');
+    setLoginStage('login');
   }
 
   async function saveWhatsapp(e: React.FormEvent<HTMLFormElement>) {
@@ -186,13 +203,57 @@ export default function AdminPage() {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-background)' }}>
         <div style={{ width: '100%', maxWidth: 400, padding: 40, backgroundColor: 'var(--color-surface-container-lowest)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)' }}>
-          <h1 className="headline-sm" style={{ color: 'var(--color-primary)', marginBottom: 8 }}>Admin Login</h1>
+          <h1 className="headline-sm" style={{ color: 'var(--color-primary)', marginBottom: 8 }}>
+            {loginStage === 'login' && 'Admin Login'}
+            {loginStage === 'forgot' && 'Forgot Password'}
+            {loginStage === 'reset' && 'Reset Password'}
+          </h1>
           <p className="body-md" style={{ color: 'var(--color-secondary)', marginBottom: 24 }}>
-            {loginStage === 'email' ? 'Enter your admin email to receive a 6-digit login code.' : 'Enter the 6-digit verification code sent to your email.'}
+            {loginStage === 'login' && 'Enter your admin email and password.'}
+            {loginStage === 'forgot' && 'Enter your admin email to receive a password reset code.'}
+            {loginStage === 'reset' && 'Enter the 6-digit code sent to your email and your new password.'}
           </p>
 
-          {loginStage === 'email' ? (
-            <form onSubmit={handleSendOTP} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {loginStage === 'login' && (
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <input 
+                type="email" 
+                className="input-field" 
+                placeholder="Admin Email" 
+                value={emailInput} 
+                onChange={e => setEmailInput(e.target.value)} 
+                required 
+                disabled={submittingLogin}
+              />
+              <input 
+                type="password" 
+                className="input-field" 
+                placeholder="Password" 
+                value={passwordInput} 
+                onChange={e => setPasswordInput(e.target.value)} 
+                required 
+                disabled={submittingLogin}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button 
+                  type="button" 
+                  onClick={() => { setLoginStage('forgot'); setLoginError(''); setStatusMsg(''); }}
+                  style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', padding: 0 }}
+                  className="label-sm"
+                >
+                  Forgot Password?
+                </button>
+              </div>
+              {statusMsg && <p className="label-sm" style={{ color: 'var(--color-primary)' }}>{statusMsg}</p>}
+              {loginError && <p className="label-sm" style={{ color: 'var(--color-error)' }}>{loginError}</p>}
+              <button type="submit" className="btn-primary" style={{ justifyContent: 'center' }} disabled={submittingLogin}>
+                {submittingLogin ? 'Logging in...' : 'Login'}
+              </button>
+            </form>
+          )}
+
+          {loginStage === 'forgot' && (
+            <form onSubmit={handleForgotPassword} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <input 
                 type="email" 
                 className="input-field" 
@@ -204,41 +265,53 @@ export default function AdminPage() {
               />
               {statusMsg && <p className="label-sm" style={{ color: 'var(--color-primary)' }}>{statusMsg}</p>}
               {loginError && <p className="label-sm" style={{ color: 'var(--color-error)' }}>{loginError}</p>}
-              <button type="submit" className="btn-primary" style={{ justifyContent: 'center' }} disabled={submittingLogin}>
-                {submittingLogin ? 'Sending...' : 'Send Login Code'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOTP} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', margin: '12px 0' }}>
-                {otpValues.map((digit, index) => (
-                  <input
-                    key={index}
-                    id={`otp-input-${index}`}
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={1}
-                    value={digit}
-                    onChange={e => handleOtpChange(e.target.value, index)}
-                    onKeyDown={e => handleOtpKeyDown(e, index)}
-                    onPaste={handleOtpPaste}
-                    disabled={submittingLogin}
-                    style={{
-                      width: 42,
-                      height: 46,
-                      textAlign: 'center',
-                      fontSize: 20,
-                      fontWeight: 'bold',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--color-outline-variant)',
-                      backgroundColor: 'var(--color-surface-container)',
-                      color: 'var(--color-primary)',
-                      boxShadow: 'var(--shadow-xs)'
-                    }}
-                  />
-                ))}
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button 
+                  type="button" 
+                  className="btn-secondary" 
+                  style={{ flex: 1, justifyContent: 'center' }} 
+                  onClick={() => { setLoginStage('login'); setLoginError(''); setStatusMsg(''); }}
+                  disabled={submittingLogin}
+                >
+                  Back
+                </button>
+                <button type="submit" className="btn-primary" style={{ flex: 2, justifyContent: 'center' }} disabled={submittingLogin}>
+                  {submittingLogin ? 'Sending...' : 'Send Reset Code'}
+                </button>
               </div>
+            </form>
+          )}
+
+          {loginStage === 'reset' && (
+            <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <input 
+                type="text" 
+                className="input-field" 
+                placeholder="6-digit Code" 
+                maxLength={6}
+                value={otpInput} 
+                onChange={e => setOtpInput(e.target.value)} 
+                required 
+                disabled={submittingLogin}
+              />
+              <input 
+                type="password" 
+                className="input-field" 
+                placeholder="New Password (min. 6 chars)" 
+                value={newPasswordInput} 
+                onChange={e => setNewPasswordInput(e.target.value)} 
+                required 
+                disabled={submittingLogin}
+              />
+              <input 
+                type="password" 
+                className="input-field" 
+                placeholder="Confirm New Password" 
+                value={confirmNewPasswordInput} 
+                onChange={e => setConfirmNewPasswordInput(e.target.value)} 
+                required 
+                disabled={submittingLogin}
+              />
               {statusMsg && <p className="label-sm" style={{ color: 'var(--color-primary)' }}>{statusMsg}</p>}
               {loginError && <p className="label-sm" style={{ color: 'var(--color-error)' }}>{loginError}</p>}
               <div style={{ display: 'flex', gap: 12 }}>
@@ -246,13 +319,13 @@ export default function AdminPage() {
                   type="button" 
                   className="btn-secondary" 
                   style={{ flex: 1, justifyContent: 'center' }} 
-                  onClick={() => { setLoginStage('email'); setLoginError(''); setStatusMsg(''); setOtpValues(Array(6).fill('')); }}
+                  onClick={() => { setLoginStage('login'); setLoginError(''); setStatusMsg(''); }}
                   disabled={submittingLogin}
                 >
-                  Back
+                  Cancel
                 </button>
                 <button type="submit" className="btn-primary" style={{ flex: 2, justifyContent: 'center' }} disabled={submittingLogin}>
-                  {submittingLogin ? 'Verifying...' : 'Verify & Login'}
+                  {submittingLogin ? 'Resetting...' : 'Reset & Login'}
                 </button>
               </div>
             </form>
@@ -365,6 +438,43 @@ export default function AdminPage() {
                   disabled={savingGallery || !galleryFile}
                 >
                   {savingGallery ? 'Uploading...' : 'Upload Banner Image'}
+                </button>
+              </form>
+            </div>
+
+            {/* Change Password */}
+            <div style={{ backgroundColor: 'var(--color-surface-container-low)', borderRadius: 'var(--radius-xl)', padding: 24, boxShadow: 'var(--shadow-sm)', border: '1px solid rgba(212,195,191,0.3)' }}>
+              <h3 className="label-md" style={{ color: 'var(--color-primary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>lock</span>
+                Change Admin Password
+              </h3>
+              <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)', marginBottom: 16 }}>
+                Update your login password.
+              </p>
+              <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <input
+                  type="password" className="input-field"
+                  placeholder="Current Password"
+                  value={changePasswordCurrent}
+                  onChange={e => setChangePasswordCurrent(e.target.value)}
+                  required
+                />
+                <input
+                  type="password" className="input-field"
+                  placeholder="New Password (min 6 chars)"
+                  value={changePasswordNew}
+                  onChange={e => setChangePasswordNew(e.target.value)}
+                  required
+                />
+                <input
+                  type="password" className="input-field"
+                  placeholder="Confirm New Password"
+                  value={changePasswordConfirm}
+                  onChange={e => setChangePasswordConfirm(e.target.value)}
+                  required
+                />
+                <button type="submit" className="btn-primary" style={{ justifyContent: 'center' }} disabled={savingChangePassword}>
+                  {savingChangePassword ? 'Saving...' : 'Save Password'}
                 </button>
               </form>
             </div>

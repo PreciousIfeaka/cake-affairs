@@ -56,13 +56,19 @@ export const getCloudinarySignature = (folder: string = 'cake-affairs'): Promise
 }>> =>
   api.get('/cloudinary/signature', { params: { folder } });
 
-export const requestOTP = (email: string): Promise<AxiosResponse<{ message: string }>> =>
-  api.post('/auth/otp', { email });
-
-export const verifyOTP = (email: string, code: string): Promise<AxiosResponse<{ token: string }>> =>
-  api.post('/auth/verify', { email, code });
+export const login = (email: string, password: string): Promise<AxiosResponse<{ token: string; success: boolean }>> =>
+  api.post('/auth/login', { email, password });
 
 export const logout = (): Promise<AxiosResponse<{ success: boolean }>> =>
   api.post('/auth/logout');
+
+export const forgotPassword = (email: string): Promise<AxiosResponse<{ message: string }>> =>
+  api.post('/auth/forgot-password', { email });
+
+export const resetPassword = (email: string, code: string, newPassword: string): Promise<AxiosResponse<{ token: string; success: boolean }>> =>
+  api.post('/auth/reset-password', { email, code, newPassword });
+
+export const changePassword = (currentPassword: string, newPassword: string): Promise<AxiosResponse<{ success: boolean; message: string }>> =>
+  api.post('/auth/change-password', { currentPassword, newPassword });
 
 export default api;
