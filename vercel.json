@@ -18,6 +18,10 @@
       }
     },
     {
+      "source": "/((?!api/|assets/|logo.png|vite.svg|favicon.ico|index.html).*)",
+      "destination": "/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": {
         "type": "service",

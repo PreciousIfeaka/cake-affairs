@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const { runMigrations } = require('./src/db/migrations');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
 // HTTP Request Logger
