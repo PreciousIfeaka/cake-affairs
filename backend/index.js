@@ -9,7 +9,6 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
-// HTTP Request Logger
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
@@ -19,7 +18,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Security middleware
 app.use(helmet());
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -43,18 +41,38 @@ app.use('/api/cloudinary', uploadLimiter);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-runMigrations()
-  .then(() => {
-    console.log('PostgreSQL database migrations complete.');
-    if (require.main === module) {
-      app.listen(PORT, () => {
-        console.log(`Cake Affairs API running on http://localhost:${PORT}`);
+let migrationsPromise = null;
+
+function ensureMigrations() {
+  if (!migrationsPromise) {
+    migrationsPromise = runMigrations()
+      .then(() => {
+        console.log('PostgreSQL database migrations complete.');
+      })
+      .catch((err) => {
+        console.error('PostgreSQL migration failed:', err);
+        migrationsPromise = null;
+        throw err;
       });
-    }
-  })
-  .catch((err) => {
-    console.error('PostgreSQL migration failed:', err);
+  }
+  return migrationsPromise;
+}
+
+app.use(async (req, res, next) => {
+  if (req.path === '/health') return next();
+  try {
+    await ensureMigrations();
+    next();
+  } catch (err) {
+    res.status(500).json({ error: 'Database initialization failed. Please try again.' });
+  }
+});
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Cake Affairs API running on http://localhost:${PORT}`);
   });
+}
 
 app.use('/api/auth', require('./src/routes/auth'));
 app.use('/api/products', require('./src/routes/products'));

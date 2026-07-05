@@ -26,7 +26,7 @@ function getPool() {
 
 async function runMigrations() {
   const db = getPool();
-  
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS products (
       id          TEXT PRIMARY KEY,
@@ -84,6 +84,22 @@ async function runMigrations() {
     INSERT INTO settings (key, value)
     VALUES ('gallery_image_public_id', '')
     ON CONFLICT (key) DO NOTHING;
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_products_created_at ON products (created_at DESC);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_products_category_slug ON products (category_slug);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_products_category_slug_created_at ON products (category_slug, created_at ASC);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_products_price ON products (price);
   `);
 }
 
