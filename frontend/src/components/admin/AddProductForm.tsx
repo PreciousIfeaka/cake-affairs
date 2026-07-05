@@ -123,9 +123,11 @@ export default function AddProductForm({ onSuccess, editingProduct = null, onCan
         <h2 className="headline-sm" style={{ color: 'var(--color-primary)' }}>
           {editingProduct ? 'Edit Cake Masterpiece' : 'Add New Cake'}
         </h2>
-        <span className="material-symbols-outlined" style={{ color: 'var(--color-outline)' }}>
-          {editingProduct ? 'edit_note' : 'auto_awesome'}
-        </span>
+        {editingProduct && (
+          <span className="material-symbols-outlined" style={{ color: 'var(--color-outline)' }}>
+            edit_note
+          </span>
+        )}
       </div>
 
       <form onSubmit={handleSubmit}>
