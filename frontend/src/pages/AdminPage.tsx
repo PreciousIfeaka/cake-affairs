@@ -28,7 +28,7 @@ export default function AdminPage() {
   const { products, loading, refetch } = useProducts({ limit: 50 });
   const [authenticated, setAuthenticated] = useState<boolean>(() => isStoredAdminLoggedIn());
   const [emailInput, setEmailInput] = useState<string>('');
-  const [codeInput, setCodeInput] = useState<string>('');
+  const [otpValues, setOtpValues] = useState<string[]>(Array(6).fill(''));
   const [loginStage, setLoginStage] = useState<'email' | 'code'>('email');
   const [submittingLogin, setSubmittingLogin] = useState<boolean>(false);
   const [statusMsg, setStatusMsg] = useState<string>('');
@@ -70,8 +70,64 @@ export default function AdminPage() {
     setSubmittingLogin(true);
     setLoginError('');
     setStatusMsg('Verifying code...');
+  const handleOtpChange = (val: string, index: number) => {
+    if (val !== '' && !/^[0-9]$/.test(val)) return;
+    const newOtp = [...otpValues];
+    newOtp[index] = val;
+    setOtpValues(newOtp);
+
+    // Focus next box if value is filled
+    if (val !== '' && index < 5) {
+      const nextInput = document.getElementById(`otp-input-${index + 1}`);
+      nextInput?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Backspace') {
+      if (otpValues[index] === '' && index > 0) {
+        const prevInput = document.getElementById(`otp-input-${index - 1}`);
+        prevInput?.focus();
+        const newOtp = [...otpValues];
+        newOtp[index - 1] = '';
+        setOtpValues(newOtp);
+      } else {
+        const newOtp = [...otpValues];
+        newOtp[index] = '';
+        setOtpValues(newOtp);
+      }
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData('text').slice(0, 6);
+    if (!/^[0-9]+$/.test(pasteData)) return;
+
+    const newOtp = [...otpValues];
+    for (let i = 0; i < 6; i++) {
+      if (pasteData[i]) {
+        newOtp[i] = pasteData[i];
+      }
+    }
+    setOtpValues(newOtp);
+    const focusIndex = Math.min(pasteData.length, 5);
+    const targetInput = document.getElementById(`otp-input-${focusIndex}`);
+    targetInput?.focus();
+  };
+
+  async function handleVerifyOTP(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const code = otpValues.join('');
+    if (code.length !== 6) {
+      setLoginError('Please enter the full 6-digit verification code.');
+      return;
+    }
+    setSubmittingLogin(true);
+    setLoginError('');
+    setStatusMsg('Verifying code...');
     try {
-      const res = await verifyOTP(emailInput, codeInput);
+      const res = await verifyOTP(emailInput, code);
       const token = res.data.token;
       
       const expiryTime = Date.now() + EXPIRE_TIME_MS;
@@ -102,7 +158,7 @@ export default function AdminPage() {
     setAuthenticated(false);
     setLoginStage('email');
     setEmailInput('');
-    setCodeInput('');
+    setOtpValues(Array(6).fill(''));
   }
 
   async function saveWhatsapp(e: React.FormEvent<HTMLFormElement>) {
@@ -159,17 +215,36 @@ export default function AdminPage() {
               </button>
             </form>
           ) : (
-            <form onSubmit={handleVerifyOTP} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <input 
-                type="text" 
-                className="input-field" 
-                placeholder="6-Digit Code" 
-                value={codeInput} 
-                onChange={e => setCodeInput(e.target.value)} 
-                maxLength={6}
-                required 
-                disabled={submittingLogin}
-              />
+            <form onSubmit={handleVerifyOTP} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', margin: '12px 0' }}>
+                {otpValues.map((digit, index) => (
+                  <input
+                    key={index}
+                    id={`otp-input-${index}`}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={1}
+                    value={digit}
+                    onChange={e => handleOtpChange(e.target.value, index)}
+                    onKeyDown={e => handleOtpKeyDown(e, index)}
+                    onPaste={handleOtpPaste}
+                    disabled={submittingLogin}
+                    style={{
+                      width: 42,
+                      height: 46,
+                      textAlign: 'center',
+                      fontSize: 20,
+                      fontWeight: 'bold',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--color-outline-variant)',
+                      backgroundColor: 'var(--color-surface-container)',
+                      color: 'var(--color-primary)',
+                      boxShadow: 'var(--shadow-xs)'
+                    }}
+                  />
+                ))}
+              </div>
               {statusMsg && <p className="label-sm" style={{ color: 'var(--color-primary)' }}>{statusMsg}</p>}
               {loginError && <p className="label-sm" style={{ color: 'var(--color-error)' }}>{loginError}</p>}
               <div style={{ display: 'flex', gap: 12 }}>
@@ -177,7 +252,7 @@ export default function AdminPage() {
                   type="button" 
                   className="btn-secondary" 
                   style={{ flex: 1, justifyContent: 'center' }} 
-                  onClick={() => { setLoginStage('email'); setLoginError(''); setStatusMsg(''); }}
+                  onClick={() => { setLoginStage('email'); setLoginError(''); setStatusMsg(''); setOtpValues(Array(6).fill('')); }}
                   disabled={submittingLogin}
                 >
                   Back
