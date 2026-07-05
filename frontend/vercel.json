@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/((?!assets/|logo.png|vite.svg).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
