@@ -257,7 +257,8 @@ body {
 .header-title {
   color: var(--color-primary);
   font-family: 'Libre Caslon Text', serif;
-  font-size: 32px;
+  font-size: 38px;
+  font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.3px;
 }
@@ -301,7 +302,7 @@ body {
   }
 
   .header-title {
-    font-size: 20px;
+    font-size: 24px;
   }
 
   .header-subtitle {
@@ -328,7 +329,7 @@ body {
     max-width: calc(100% - 120px);
   }
   .header-title {
-    font-size: 16px;
+    font-size: 19px;
   }
   .header-subtitle {
     font-size: 11px;
