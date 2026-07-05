@@ -12,7 +12,10 @@ function getPool() {
       connectionString,
       ssl: connectionString.includes('localhost') || connectionString.includes('127.0.0.1') ? false : {
         rejectUnauthorized: false
-      }
+      },
+      max: parseInt(process.env.DB_POOL_MAX || '2', 10), // Limit active connections per serverless instance
+      idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '15000', 10), // Close idle connections quickly
+      connectionTimeoutMillis: 5000 // Fast fail if connection cannot be established
     });
     pool.on('error', (err) => {
       console.error('Unexpected error on idle client', err);
