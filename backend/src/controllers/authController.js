@@ -92,11 +92,27 @@ async function verifyOTP(req, res) {
       { expiresIn: '24h' }
     );
 
-    res.json({ token });
+    res.cookie('admin_key', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
+
+    res.json({ token, success: true }); // Return token as fallback, but set cookie primarily
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Verification failed.' });
   }
 }
 
-module.exports = { requestOTP, verifyOTP };
+async function logout(req, res) {
+  res.clearCookie('admin_key', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
+  });
+  res.json({ success: true });
+}
+
+module.exports = { requestOTP, verifyOTP, logout };

@@ -4,6 +4,7 @@ import { Product, Filters, ProductsResponse, SettingResponse, CategorySample, Ca
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
+  withCredentials: true,
 });
 
 export function setAdminKey(key: string): void {
@@ -60,5 +61,8 @@ export const requestOTP = (email: string): Promise<AxiosResponse<{ message: stri
 
 export const verifyOTP = (email: string, code: string): Promise<AxiosResponse<{ token: string }>> =>
   api.post('/auth/verify', { email, code });
+
+export const logout = (): Promise<AxiosResponse<{ success: boolean }>> =>
+  api.post('/auth/logout');
 
 export default api;

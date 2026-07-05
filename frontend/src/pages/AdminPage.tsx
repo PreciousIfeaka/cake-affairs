@@ -4,30 +4,29 @@ import AddProductForm from '../components/admin/AddProductForm';
 import ProductListingGrid from '../components/admin/ProductListingGrid';
 import ImageUploadZone from '../components/admin/ImageUploadZone';
 import { useProducts } from '../hooks/useProducts';
-import { setAdminKey, getSetting, updateSetting, uploadGalleryImage, requestOTP, verifyOTP } from '../services/api';
+import { setAdminKey, getSetting, updateSetting, uploadGalleryImage, requestOTP, verifyOTP, logout } from '../services/api';
 import { uploadDirectToCloudinary } from '../utils/cloudinaryUpload';
 import { Product } from '../types';
 import ProductDetailModal from '../components/catalogue/ProductDetailModal';
 
 const EXPIRE_TIME_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-function getStoredAdminKey(): string {
-  const key = localStorage.getItem('admin_key');
+function isStoredAdminLoggedIn(): boolean {
+  const loggedIn = localStorage.getItem('admin_logged_in');
   const expiry = localStorage.getItem('admin_key_expiry');
-  if (!key || !expiry) return '';
+  if (!loggedIn || !expiry) return false;
   
   if (Date.now() > parseInt(expiry, 10)) {
-    localStorage.removeItem('admin_key');
+    localStorage.removeItem('admin_logged_in');
     localStorage.removeItem('admin_key_expiry');
-    return '';
+    return false;
   }
-  return key;
+  return true;
 }
 
 export default function AdminPage() {
   const { products, loading, refetch } = useProducts({ limit: 50 });
-  const [apiKey, setApiKey] = useState<string>(() => getStoredAdminKey());
-  const [authenticated, setAuthenticated] = useState<boolean>(() => !!getStoredAdminKey());
+  const [authenticated, setAuthenticated] = useState<boolean>(() => isStoredAdminLoggedIn());
   const [emailInput, setEmailInput] = useState<string>('');
   const [codeInput, setCodeInput] = useState<string>('');
   const [loginStage, setLoginStage] = useState<'email' | 'code'>('email');
@@ -41,10 +40,6 @@ export default function AdminPage() {
   const [savingGallery, setSavingGallery] = useState<boolean>(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [selectedViewProduct, setSelectedViewProduct] = useState<Product | null>(null);
-
-  useEffect(() => {
-    if (apiKey) setAdminKey(apiKey);
-  }, [apiKey]);
 
   useEffect(() => {
     getSetting('whatsapp_number').then(r => setWhatsappNumber(r.data.value)).catch(() => {});
@@ -80,10 +75,11 @@ export default function AdminPage() {
       const token = res.data.token;
       
       const expiryTime = Date.now() + EXPIRE_TIME_MS;
-      localStorage.setItem('admin_key', token);
+      localStorage.setItem('admin_logged_in', 'true');
       localStorage.setItem('admin_key_expiry', expiryTime.toString());
-      setApiKey(token);
-      setAdminKey(token);
+      if (token) {
+        setAdminKey(token); // Fallback header
+      }
       setAuthenticated(true);
       setStatusMsg('');
     } catch (err: any) {
@@ -94,10 +90,15 @@ export default function AdminPage() {
     }
   }
 
-  function handleLogout() {
-    localStorage.removeItem('admin_key');
+  async function handleLogout() {
+    try {
+      await logout();
+    } catch (err) {
+      console.error('Failed to logout from server:', err);
+    }
+    localStorage.removeItem('admin_logged_in');
     localStorage.removeItem('admin_key_expiry');
-    setApiKey('');
+    setAdminKey('');
     setAuthenticated(false);
     setLoginStage('email');
     setEmailInput('');

@@ -1,7 +1,18 @@
 const jwt = require('jsonwebtoken');
 
+function getCookie(req, name) {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return null;
+  const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+    const [key, value] = cookie.split('=').map(c => c.trim());
+    if (key) acc[key] = value;
+    return acc;
+  }, {});
+  return cookies[name] || null;
+}
+
 module.exports = function adminAuth(req, res, next) {
-  let token = req.headers['authorization'] || req.headers['x-admin-key'];
+  let token = getCookie(req, 'admin_key') || req.headers['authorization'] || req.headers['x-admin-key'];
   if (!token) {
     return res.status(401).json({ error: 'Unauthorized: No token provided' });
   }
