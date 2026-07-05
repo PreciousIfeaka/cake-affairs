@@ -42,11 +42,10 @@ app.use('/api/cloudinary', uploadLimiter);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Run DB migrations on startup
 runMigrations()
   .then(() => {
     console.log('PostgreSQL database migrations complete.');
-    if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    if (require.main === module) {
       app.listen(PORT, () => {
         console.log(`Cake Affairs API running on http://localhost:${PORT}`);
       });
