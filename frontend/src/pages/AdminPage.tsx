@@ -64,12 +64,6 @@ export default function AdminPage() {
     }
   }
 
-  async function handleVerifyOTP(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!codeInput) return;
-    setSubmittingLogin(true);
-    setLoginError('');
-    setStatusMsg('Verifying code...');
   const handleOtpChange = (val: string, index: number) => {
     if (val !== '' && !/^[0-9]$/.test(val)) return;
     const newOtp = [...otpValues];
